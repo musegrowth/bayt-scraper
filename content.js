@@ -622,12 +622,13 @@
    *   PREFERRED CANDIDATE
    *   Years of experience: …
    */
-  function extractDetails() {
+  function extractDetails(root) {
+    const scope = root || document;
     const parts = [];
 
     // Label strip: location / type+experience / industry.
     try {
-      const labels = pick(SEL.detailLabels);
+      const labels = pick(SEL.detailLabels, scope);
       if (labels) {
         const bits = Array.from(labels.querySelectorAll('[data-automation-id]'))
           .map((d) => clean(d.innerText || d.textContent))
@@ -637,18 +638,18 @@
     } catch (e) { /* optional */ }
 
     try {
-      const desc = htmlToText(pick(SEL.detailDescription));
+      const desc = htmlToText(pick(SEL.detailDescription, scope));
       if (desc) parts.push('JOB DESCRIPTION\n' + desc);
     } catch (e) { /* optional */ }
 
     try {
-      const skills = htmlToText(pick(SEL.detailSkills));
+      const skills = htmlToText(pick(SEL.detailSkills, scope));
       if (skills) parts.push('SKILLS\n' + skills);
     } catch (e) { /* optional */ }
 
     // "Preferred candidate" is a run of label/value rows after that heading.
     try {
-      const heading = Array.from(document.querySelectorAll(SEL.detailPreferredHeading))
+      const heading = Array.from(scope.querySelectorAll(SEL.detailPreferredHeading))
         .find((h) => /preferred candidate/i.test(clean(h.textContent)));
 
       if (heading) {
@@ -672,6 +673,27 @@
   }
 
   /**
+   * Fetch the job's own page and read the description straight out of it.
+   *
+   * This is the primary route because it depends on nothing but the URL
+   * already scraped from the card: no click handler to trigger, no panel
+   * to wait for, and no chance of reading a panel that still belongs to
+   * the previous job. The request is same-origin and carries the user's
+   * session, exactly as clicking through would.
+   *
+   * @returns {Promise<string>} formatted details, or '' if unavailable
+   */
+  async function fetchDetails(url) {
+    if (!url || url === 'N/A') return '';
+
+    const res = await fetch(url, { credentials: 'include' });
+    if (!res.ok) return '';
+
+    const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+    return extractDetails(doc);
+  }
+
+  /**
    * Click one job card and wait for its detail panel.
    *
    * The card element is clicked rather than its title link: the link would
@@ -688,18 +710,34 @@
     // Already showing this job (Bayt opens the first card by default)?
     if (wantedId && panelJobId() === wantedId) return extractDetails();
 
-    li.scrollIntoView({ block: 'center' });
-    await rand(150, 350);
-    realClick(li);
-
-    const ready = await waitFor(() => {
+    const arrived = () => {
       if (wantedId) {
         const pid = panelJobId();
         return pid && pid === wantedId ? true : null;   // exact match
       }
       const sig = panelSignature();
       return sig && sig !== before ? true : null;        // fallback: changed
-    }, 12000);
+    };
+
+    li.scrollIntoView({ block: 'center' });
+    await rand(150, 350);
+
+    // First try the card itself — that is where Bayt's own handler lives.
+    realClick(li);
+    let ready = await waitFor(arrived, 6000);
+
+    // Some layouts bind the handler to the title link instead. Click that,
+    // with its href detached so it opens the panel without navigating.
+    if (!ready) {
+      const link = pick(SEL.cardTitle, li);
+      if (link && link.tagName === 'A') {
+        const href = link.getAttribute('href');
+        link.removeAttribute('href');
+        realClick(link);
+        if (href !== null) link.setAttribute('href', href);
+        ready = await waitFor(arrived, 6000);
+      }
+    }
 
     if (!ready) return '';
     await rand(250, 500);          // let the panel finish rendering
@@ -776,12 +814,21 @@
           }, () => void chrome.runtime.lastError);
         } catch (e) { /* the popup may be closed */ }
 
+        let text = '';
+
+        // 1. Read the job's own page — no clicking, nothing to mistime.
         try {
-          const text = await openCardDetails(nodes[i], jobs[i].url);
-          jobs[i].details = text || 'N/A';
-        } catch (e) {
-          jobs[i].details = 'N/A';      // one unreadable panel is not fatal
+          text = await fetchDetails(jobs[i].url);
+        } catch (e) { /* fall through to the click route */ }
+
+        // 2. If that was blocked or empty, click the card and read the panel.
+        if (!text) {
+          try {
+            text = await openCardDetails(nodes[i], jobs[i].url);
+          } catch (e) { /* leave it as N/A */ }
         }
+
+        jobs[i].details = text || 'N/A';
 
         await rand(700, 1400);          // human pacing between clicks
       }

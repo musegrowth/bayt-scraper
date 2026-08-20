@@ -608,10 +608,15 @@ async function scrapePages(tabId, row) {
       collected.push(job);
     });
 
-    report({
-      log: '   · page ' + page + ': ' + res.jobs.length + ' job(s)',
-      jobCount: state.results.length + collected.length
-    });
+    // Say how many full descriptions actually came back, so a silently
+    // failing detail pass is visible instead of looking like success.
+    let line = '   · page ' + page + ': ' + res.jobs.length + ' job(s)';
+    if (state.withDetails) {
+      const withText = res.jobs.filter((j) => j.details && j.details !== 'N/A').length;
+      line += ', ' + withText + ' with full description';
+    }
+
+    report({ log: line, jobCount: state.results.length + collected.length });
 
     // resultsUrl stays as captured on entry: opening a detail panel can
     // push a ?jobId= onto the address bar, which must not leak into the

@@ -130,11 +130,15 @@ click **Find jobs** → wait for the results page → scrape → optional extra 
 * **Real pagination links.** Multi-page mode reads the next page's URL from the `#pagination` strip
   (`<a class="jsAjaxLoad" href="…?page=2">`) instead of guessing, so any filters already in the URL are kept,
   and a page that isn't linked ends the loop rather than being requested blindly.
-* **Full descriptions are verified, not assumed.** With the checkbox on, each card is clicked (the card itself,
-  never its title link, which would navigate away) and the run waits until the panel's own `jobId` matches that
-  card's id before reading it — so a panel that has not refreshed yet is never recorded as the wrong job's
-  description. A panel that never arrives leaves `Job_Details` as `N/A` and the run moves on.
+* **Full descriptions take the reliable route first.** With the checkbox on, each job's own page is fetched
+  using the URL already scraped from its card, and the description is read from that HTML. Nothing has to be
+  clicked, nothing has to be waited for, and there is no way to read one job's panel as another's.
+  If that fetch is blocked or comes back empty, the run falls back to clicking the card (then its title link,
+  href detached so it cannot navigate) and waits until the panel's own `jobId` matches the card's id before
+  reading it. If neither route works, `Job_Details` is `N/A` and the run moves on.
   **Stop** interrupts this pass between jobs rather than after the whole page.
+* **The log says how many worked.** Each page reports `20 job(s), 20 with full description`, so a detail pass
+  that is silently failing looks different from one that is working.
 * **Failures are per-row.** A row that errors increments the **Errors** counter and the run continues.
 * **Crash-safe.** Results are mirrored to `chrome.storage` after every step, so a service-worker restart does
   not lose data — use **Download** to export it.
@@ -202,7 +206,7 @@ Degree: High school or equivalent
 | `Content script did not respond` | Reload the extension at `chrome://extensions/`. |
 | Nothing downloads | Check Chrome's download settings; the file is written without a Save-As prompt. |
 | Run stalls | Increase **Delay (sec)** — Bayt throttles rapid requests. |
-| `Job_Details` is `N/A` | The detail panel did not open, or opened without a matching `jobId`. Check `SEL.detailDescription` / `SEL.detailJobIdLink` in `content.js`. |
+| `Job_Details` is `N/A` | Neither route reached the posting. Check the page log — it reports how many of each page's jobs got a description. If it is 0, the job-page markup likely changed: update `SEL.detailDescription` / `SEL.detailSkills` in `content.js`. |
 | Full descriptions are slow | Expected — one click and one panel load per job. Untick the box to scrape listings only. |
 
 ---
