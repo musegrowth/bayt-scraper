@@ -459,12 +459,17 @@ async function processRow(row) {
   // --- 4. Scrape page 1, then optional extra pages --------------------
   const collected = [];
   let resultsUrl = (await getTab(tabId) || {}).url || '';
+  let nextUrl = null;          // resolved from the page we are standing on
+  let sawPagination = false;   // did that page actually have a strip?
 
   for (let page = 1; page <= state.maxPages; page++) {
     if (state.stopRequested) break;
 
     if (page > 1) {
-      const target = withPage(resultsUrl, page);
+      // nextUrl was read from the previous page's #pagination strip, so it
+      // keeps any filters already in the URL. Only if no strip was found do
+      // we fall back to a constructed ?page=N.
+      const target = nextUrl || withPage(resultsUrl, page);
       const cur = (await getTab(tabId) || {}).url || '';
       if (target === cur) break;                       // nothing more to do
       await humanDelay();
@@ -495,7 +500,25 @@ async function processRow(row) {
     });
 
     if (page === 1) resultsUrl = (await getTab(tabId) || {}).url || resultsUrl;
-    if (res.jobs.length < 5) break;                    // likely the last page
+    if (page >= state.maxPages) break;
+
+    // --- Look ahead while we are still on this page ---------------------
+    nextUrl = null;
+    sawPagination = false;
+    try {
+      const nav = await sendToTab(tabId, { type: 'PAGE_URL', page: page + 1 });
+      if (nav && nav.ok) {
+        sawPagination = nav.linkCount > 0;
+        nextUrl = nav.url;
+      }
+    } catch (e) { /* treat as "no pagination info" */ }
+
+    if (sawPagination && !nextUrl) {
+      report({ log: '   · page ' + page + ' is the last page' });
+      break;
+    }
+    // With no strip to trust, a short page is the only end-of-results hint.
+    if (!sawPagination && res.jobs.length < 5) break;
   }
 
   return collected;
@@ -510,6 +533,10 @@ const CSV_COLUMNS = [
   { key: 'title',          header: 'Job_Title' },
   { key: 'company',        header: 'Company' },
   { key: 'location',       header: 'Job_Location' },
+  { key: 'careerLevel',    header: 'Career_Level' },
+  { key: 'experience',     header: 'Experience' },
+  { key: 'remote',         header: 'Remote' },
+  { key: 'otherInfo',      header: 'Other_Info' },
   { key: 'summary',        header: 'Summary' },
   { key: 'date',           header: 'Job_Date' },
   { key: 'url',            header: 'Job_URL' },

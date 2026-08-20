@@ -66,7 +66,12 @@ Downloads automatically when the queue finishes, as `bayt-jobs-<timestamp>.csv`:
 | --- | --- |
 | `Search_Text`, `Search_Location` | Echoed from your input row |
 | `Job_Title`, `Job_URL` | Title text and the absolute link to the posting |
-| `Company`, `Job_Location` | |
+| `Company` | From the company link on the card (`/en/company/…`) |
+| `Job_Location` | From the card's metadata row, e.g. `Dubai, UAE` |
+| `Career_Level` | e.g. `Mid career` |
+| `Experience` | e.g. `4-10 Years of Experience` |
+| `Remote` | `Yes` / `No`, derived from the metadata row |
+| `Other_Info` | Every other fact the card shows, `\|`-joined — job type, and anything Bayt adds later |
 | `Summary` | Bayt's AI summary, with the `✨ Summary:` prefix stripped |
 | `Job_Date` | e.g. `6 days ago` |
 | `Result_Page`, `Scraped_At` | Which page it came from, ISO timestamp |
@@ -106,6 +111,9 @@ click **Find jobs** → wait for the results page → scrape → optional extra 
   scoped to the dropdown under `#search_country__r`.
 * **Direct-URL fallback.** If the widget fails or no country suggestion matches, the run falls back to Bayt's
   canonical URL — `https://www.bayt.com/en/<country>/jobs/<keyword>-jobs/` — instead of searching the wrong place.
+* **Real pagination links.** Multi-page mode reads the next page's URL from the `#pagination` strip
+  (`<a class="jsAjaxLoad" href="…?page=2">`) instead of guessing, so any filters already in the URL are kept,
+  and a page that isn't linked ends the loop rather than being requested blindly.
 * **Failures are per-row.** A row that errors increments the **Errors** counter and the run continues.
 * **Crash-safe.** Results are mirrored to `chrome.storage` after every step, so a service-worker restart does
   not lose data — use **Download** to export it.
@@ -123,8 +131,13 @@ const SEL = {
   searchInput:   '#text_search',
   locationInput: '#search_country__r',
   submitButton:  '#submitButtonQuickSearchWidget',
-  jobCards:      ['#results_inner_card ul li[data-js-job]', /* … */],
-  cardTitle:     ['h2 a', 'a[data-js-aid="jobID"]', 'h2'],
+  jobCards:        ['#results_inner_card ul li[data-js-job]', /* … */],
+  cardTitle:       ['h2 a', 'a[data-js-aid="jobID"]', 'h2'],
+  cardCompany:     ['a[href*="/company/"]', /* … */],
+  cardMeta:        ['dl.dlist', 'dl'],          // location / career level / remote
+  metaLocation:    'dt[class*="jb-label-location"]',
+  metaCareerLevel: 'dt[class*="jb-label-careerlevel"]',
+  paginationLinks: ['#pagination a[href]', /* … */],
   // …
 };
 ```

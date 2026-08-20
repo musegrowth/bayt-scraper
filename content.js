@@ -56,10 +56,29 @@
 
     // --- Fields inside one job card ------------------------------------
     cardTitle:   ['h2 a', 'a[data-js-aid="jobID"]', 'h2'],
-    cardCompany: ['.jb-company', 'b.jb-company', '[class*="jb-company"]', '.t-nowrap b'],
+    // Company link, e.g. <a href="/en/company/gulbahar-tobacco-...">
+    // XPath: .../div[1]/div/div[1]/div/div/a
+    cardCompany: [
+      'a[href*="/company/"]',
+      '.jb-company', 'b.jb-company', '[class*="jb-company"]', '.t-nowrap b'
+    ],
+
+    // Metadata row: <dl class="dlist ..."> with one <dt> per fact —
+    // location, career level + years, remote, etc.  XPath: .../div[3]/dl
+    cardMeta:    ['dl.dlist', 'dl'],
+    metaLocation:    'dt[class*="jb-label-location"]',
+    metaCareerLevel: 'dt[class*="jb-label-careerlevel"]',
+
+    // Used only when the card has no <dl> at all.
     cardLoc:     ['.jb-loc', '[class*="jb-loc"]', '[class*="t-mute"] .u-icon-location'],
     cardSummary: ['.jb-descr', '[class*="jb-descr"]', 'div.m10t.t-small'],
     cardDate:    ['.jb-date', '[class*="jb-date"]', 'div.jb-date span'],
+
+    // --- Pagination -----------------------------------------------------
+    // <ul id="pagination"> … <li><a class="jsAjaxLoad"
+    //   href="/en/uae/jobs/graphic-designer-jobs/?page=2">2</a></li> … </ul>
+    // XPath of the next-page link: //*[@id="pagination"]/li[4]/a
+    paginationLinks: ['#pagination a[href]', 'ul.pagination a[href]', '[class*="pagination"] a[href]'],
 
     // --- Cookie consent ("We value your privacy") -----------------------
     cookieAccept: [
@@ -417,11 +436,66 @@
     return s;
   }
 
+  /**
+   * Read the card's metadata row:
+   *
+   *   <dl class="dlist is-spaced t-small m0y row">
+   *     <dt class="... jb-label-location">   Dubai, UAE                     </dt>
+   *     <dt class="... jb-label-careerlevel">Mid career · 4-10 Years of Exp. </dt>
+   *     <dt ...>                             Remote / anything else         </dt>
+   *   </dl>
+   *
+   * Location and career level are read by their own class; every other
+   * <dt> is kept verbatim in `otherInfo`, so whatever Bayt chooses to show
+   * still lands in the CSV. Mutates `job` in place.
+   */
+  function parseMeta(li, job) {
+    const dl = pick(SEL.cardMeta, li);
+
+    if (!dl) {
+      // No <dl> on this card — fall back to the old standalone location.
+      const l = pick(SEL.cardLoc, li);
+      if (l) job.location = clean(l.innerText || l.textContent) || 'N/A';
+      return;
+    }
+
+    const others = [];
+    let allText = '';
+
+    Array.from(dl.querySelectorAll('dt')).forEach((dt) => {
+      const txt = clean(dt.innerText || dt.textContent);
+      if (!txt) return;
+      allText += ' ' + txt;
+
+      const cls = String(dt.className || '');
+
+      if (dt.matches(SEL.metaLocation) || /jb-label-location/.test(cls)) {
+        job.location = txt;                       // "Dubai, UAE"
+        return;
+      }
+
+      if (dt.matches(SEL.metaCareerLevel) || /jb-label-careerlevel/.test(cls)) {
+        // "Mid career · 4-10 Years of Experience" -> two columns.
+        const parts = txt.split(/\s*[·•|]\s*/).map(clean).filter(Boolean);
+        job.careerLevel = parts[0] || 'N/A';
+        const years = parts.slice(1).find((p) => /year|experience/i.test(p));
+        job.experience = years || (parts.length > 1 ? parts.slice(1).join(' · ') : 'N/A');
+        return;
+      }
+
+      others.push(txt);                           // Remote, job type, …
+    });
+
+    if (others.length) job.otherInfo = others.join(' | ');
+    if (/\bremote\b|work\s+from\s+home/i.test(allText)) job.remote = 'Yes';
+  }
+
   /** Read one card. Any missing field yields "N/A" instead of throwing. */
   function parseCard(li) {
     const job = {
-      title: 'N/A', url: 'N/A', company: 'N/A',
-      location: 'N/A', summary: 'N/A', date: 'N/A'
+      title: 'N/A', url: 'N/A', company: 'N/A', location: 'N/A',
+      careerLevel: 'N/A', experience: 'N/A', remote: 'No', otherInfo: 'N/A',
+      summary: 'N/A', date: 'N/A'
     };
 
     // --- Title + URL ---------------------------------------------------
@@ -440,10 +514,9 @@
       if (c) job.company = clean(c.innerText || c.textContent) || 'N/A';
     } catch (e) { /* keep N/A */ }
 
-    // --- Job location ---------------------------------------------------
+    // --- Location / career level / experience / anything else ------------
     try {
-      const l = pick(SEL.cardLoc, li);
-      if (l) job.location = clean(l.innerText || l.textContent) || 'N/A';
+      parseMeta(li, job);
     } catch (e) { /* keep N/A */ }
 
     // --- Summary --------------------------------------------------------
@@ -459,6 +532,39 @@
     } catch (e) { /* keep N/A */ }
 
     return job;
+  }
+
+  /**
+   * Resolve the absolute URL of a given result page from the pagination
+   * strip, rather than guessing at "?page=N" — this keeps any filters
+   * already present in the URL and reports honestly when there is no such
+   * page (the last page simply has no link for it).
+   *
+   * @param {number} wanted the page number to find
+   * @returns {string|null} absolute URL, or null if that page isn't linked
+   */
+  function getPageUrl(wanted) {
+    const links = pickAll(SEL.paginationLinks);
+    const target = String(wanted);
+
+    // The links are labelled by page number ("1", "2", …, "Last", "›").
+    let hit = links.find((a) => clean(a.innerText || a.textContent) === target);
+
+    // Fall back to reading the page parameter out of the href.
+    if (!hit) {
+      hit = links.find((a) => {
+        const href = a.getAttribute('href') || '';
+        const m = href.match(/[?&]page=(\d+)/);
+        return m && m[1] === target;
+      });
+    }
+
+    if (!hit) return null;
+    try {
+      return new URL(hit.getAttribute('href'), location.href).href;
+    } catch (e) {
+      return null;
+    }
   }
 
   async function scrapePage() {
@@ -520,6 +626,17 @@
       // this script down before the response is delivered.
       sendResponse({ ok: true });
       setTimeout(() => { submitSearch().catch(() => {}); }, 120);
+      return;
+    }
+
+    if (msg.type === 'PAGE_URL') {
+      // Which URL serves result page N? url === null with linkCount > 0
+      // means the strip exists and there is simply no such page.
+      sendResponse({
+        ok: true,
+        url: getPageUrl(msg.page),
+        linkCount: pickAll(SEL.paginationLinks).length
+      });
       return;
     }
 
