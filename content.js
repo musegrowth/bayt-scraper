@@ -629,6 +629,20 @@
       return;
     }
 
+    if (msg.type === 'PAGE_INFO') {
+      // What is this page a search for? Read straight off the widget so
+      // "Just Scrape" can still label its rows.
+      const kw  = pick(SEL.searchInput) || byXPath(XP.searchInput);
+      const loc = pick(SEL.locationInput) || byXPath(XP.locationInput);
+      sendResponse({
+        ok: true,
+        keyword: kw ? clean(kw.value) : '',
+        location: loc ? clean(loc.value) : '',
+        title: clean(document.title)
+      });
+      return;
+    }
+
     if (msg.type === 'HAS_WIDGET') {
       // The quick-search widget sits in the header of the home page AND of
       // every results page, so a search can start from either.

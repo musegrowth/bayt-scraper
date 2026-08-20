@@ -209,7 +209,7 @@ function loadBundledCSV() {
     })
     .catch(() => {
       // No bundled file — the popup simply waits for an upload.
-      fileName.textContent = 'Columns: Search_Text, Location';
+      if (!isJustScrape()) fileName.textContent = 'Columns: Search_Text, Location';
     });
 }
 
@@ -217,14 +217,48 @@ function loadBundledCSV() {
  * 3. OPTION WIRING
  * =================================================================== */
 
-/** Pagination count only applies in multi-page mode. */
-modeSel.addEventListener('change', () => {
+/** True when the run reads the open tab instead of working through a CSV. */
+const isJustScrape = () => modeSel.value === 'current';
+
+/**
+ * Reflect the selected mode:
+ *   single  — CSV rows, first page each
+ *   multi   — CSV rows, several pages each
+ *   current — no CSV at all; scrape the page already open
+ */
+function applyMode() {
   const multi = modeSel.value === 'multi';
-  maxPagesEl.disabled = !multi;
-  pillPages.classList.toggle('off', !multi);
+  const just  = isJustScrape();
+
+  // Pagination applies to multi-page and to Just Scrape (walk on from here).
+  maxPagesEl.disabled = !(multi || just);
+  pillPages.classList.toggle('off', !(multi || just));
   if (multi && Number(maxPagesEl.value) < 2) maxPagesEl.value = 3;
-  if (!multi) maxPagesEl.value = 1;
-});
+  if (!multi && !just) maxPagesEl.value = 1;
+
+  // The CSV row range is meaningless without a CSV.
+  startRowEl.disabled = just;
+  endRowEl.disabled   = just;
+  startRowEl.parentElement.classList.toggle('off', just);
+  endRowEl.parentElement.classList.toggle('off', just);
+  fileDrop.style.opacity = just ? '.5' : '';
+
+  if (just) {
+    fileName.textContent = 'No CSV needed — reads the Bayt tab you have open';
+    setStatus('Just Scrape: open a Bayt results page, then press Scrape.', '');
+  } else if (parsedRows.length) {
+    setStatus('Ready: ' + parsedRows.length + ' search(es) loaded.', 'ok');
+  }
+
+  refreshInputCount();
+  startBtn.disabled = !canStart();
+}
+modeSel.addEventListener('change', applyMode);
+
+/** Just Scrape needs no input; every other mode needs at least one row. */
+function canStart() {
+  return isJustScrape() || parsedRows.length > 0;
+}
 
 /** The rows actually queued = the START..END slice of the CSV. */
 function selectedRows() {
@@ -237,7 +271,7 @@ function selectedRows() {
 }
 
 function refreshInputCount() {
-  const n = selectedRows().length;
+  const n = isJustScrape() ? 1 : selectedRows().length;
   $('cInput').textContent = n;
   $('pTotal').textContent = n;
 }
@@ -248,8 +282,9 @@ endRowEl.addEventListener('input', refreshInputCount);
  * 4. START / STOP / DOWNLOAD / CLEAR
  * =================================================================== */
 startBtn.addEventListener('click', () => {
-  const rows = selectedRows();
-  if (!rows.length) { setStatus('Nothing in that row range.', 'err'); return; }
+  const just = isJustScrape();
+  const rows = just ? [] : selectedRows();
+  if (!just && !rows.length) { setStatus('Nothing in that row range.', 'err'); return; }
 
   const minDelay = Math.max(0.5, parseFloat(minDelayEl.value) || 2) * 1000;
 
@@ -257,7 +292,8 @@ startBtn.addEventListener('click', () => {
     type: 'START_SCRAPE',
     payload: {
       rows: rows,
-      maxPages: modeSel.value === 'multi'
+      mode: just ? 'current' : 'csv',
+      maxPages: (modeSel.value === 'multi' || just)
         ? Math.max(1, parseInt(maxPagesEl.value, 10) || 1)
         : 1,
       minDelay: minDelay,
@@ -305,16 +341,16 @@ clearBtn.addEventListener('click', () => {
 });
 
 function lockUI(running) {
-  const hasRows = parsedRows.length > 0;
-  startBtn.disabled   = running || !hasRows;
+  const just = isJustScrape();
+  startBtn.disabled   = running || !canStart();
   stopBtn.disabled    = !running;
   fileInput.disabled  = running;
   modeSel.disabled    = running;
   minDelayEl.disabled = running;
-  startRowEl.disabled = running;
-  endRowEl.disabled   = running;
+  startRowEl.disabled = running || just;
+  endRowEl.disabled   = running || just;
   bgTabEl.disabled    = running;
-  maxPagesEl.disabled = running || modeSel.value !== 'multi';
+  maxPagesEl.disabled = running || !(modeSel.value === 'multi' || just);
   $('pState').textContent = running ? 'Running' : 'Stopped';
 }
 

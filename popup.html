@@ -226,6 +226,7 @@
       <select id="mode">
         <option value="single">Job Listings — First Page</option>
         <option value="multi">Job Listings — Multi Page</option>
+        <option value="current">Just Scrape — Current Page</option>
       </select>
     </div>
 
@@ -248,7 +249,7 @@
     <div id="fileName">Loading input.csv…</div>
 
     <!-- Numeric options -------------------------------------------- -->
-    <div class="grid">
+    <div class="grid" id="optGrid">
       <label class="pill off" id="pillPages">
         <span>Pagination</span>
         <input type="number" id="maxPages" min="1" max="50" value="1" disabled />

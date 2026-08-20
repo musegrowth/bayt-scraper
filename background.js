@@ -33,6 +33,7 @@ function newState() {
     currentRow: 0,
     doneRows: 0,          // rows that finished cleanly
     errorRows: 0,         // rows that failed
+    mode: 'csv',          // 'csv' = search each row | 'current' = Just Scrape
     maxPages: 1,
     minDelay: 2000,
     maxDelay: 4000,
@@ -176,12 +177,19 @@ const isBaytUrl = (url) => /^https?:\/\/(www\.)?bayt\.com\//i.test(url || '');
  *   3. otherwise open a fresh one
  * Reusing a tab means the user's current page is refreshed and driven.
  */
-async function resolveWorkTab() {
+async function resolveWorkTab(requireExisting) {
   const active = (await queryTabs({ active: true, currentWindow: true }))[0];
   if (active && isBaytUrl(active.url)) return { tab: active, reused: true };
 
   const existing = (await queryTabs({ url: ['*://www.bayt.com/*', '*://bayt.com/*'] }))[0];
   if (existing) return { tab: existing, reused: true };
+
+  // "Just Scrape" has nowhere to go on its own — it reads the page the
+  // user is looking at, so a missing Bayt tab is an error, not a cue to
+  // open one.
+  if (requireExisting) {
+    throw new Error('Open a Bayt results page first, then press Scrape.');
+  }
 
   const fresh = await createTab({ url: BAYT_HOME, active: !state.backgroundTab });
   return { tab: fresh, reused: false };
@@ -326,7 +334,8 @@ async function runScrape(payload) {
   state = newState();
   state.running       = true;
   state.rows          = payload.rows;
-  state.totalRows     = payload.rows.length;
+  state.totalRows     = payload.mode === 'current' ? 1 : payload.rows.length;
+  state.mode          = payload.mode === 'current' ? 'current' : 'csv';
   state.maxPages      = payload.maxPages || 1;
   state.minDelay      = payload.minDelay || 2000;
   state.maxDelay      = payload.maxDelay || 4000;
@@ -334,9 +343,30 @@ async function runScrape(payload) {
   state.results       = carriedResults;
 
   keepAlive(true);
-  report({ message: 'Opening Bayt…', log: '▶ Run started (' + state.totalRows + ' searches)' });
+
+  if (state.mode === 'current') {
+    report({ message: 'Reading the open page…', log: '▶ Just Scrape — current page' });
+  } else {
+    report({ message: 'Opening Bayt…', log: '▶ Run started (' + state.totalRows + ' searches)' });
+  }
 
   try {
+    // ---------------- Just Scrape: no CSV, no searching ---------------
+    if (state.mode === 'current') {
+      const found = await justScrape();
+
+      if (!found) {
+        state.errorRows = 1;
+        finish('No job cards found on that page.', 'err');
+        return;
+      }
+
+      const filename = await downloadResults(state.results);
+      finish('Done — ' + found + ' job(s) from this page, ' +
+             state.results.length + ' saved to ' + filename, 'ok');
+      return;
+    }
+
     // Reuse a Bayt tab if one is already open (it gets refreshed);
     // otherwise open a dedicated one.
     const picked = await resolveWorkTab();
@@ -407,6 +437,43 @@ function finish(summary, level) {
   state.lastSummary = summary;
   keepAlive(false);
   report({ message: summary, level: level, log: '■ ' + summary, done: true, running: false });
+}
+
+/* ---------------------------------------------------------------------
+ * "Just Scrape": take whatever results page the user already has open and
+ * read it — no CSV, no typing, no navigation. Honours the pagination count
+ * so it can also walk on from where it is.
+ *
+ * @returns {Promise<number>} how many jobs this page (and its extra pages)
+ *                            yielded — 0 means there was nothing to read.
+ * ------------------------------------------------------------------- */
+async function justScrape() {
+  const picked = await resolveWorkTab(true);   // throws if no Bayt tab
+  state.tabId = picked.tab.id;
+  state.totalRows = 1;
+
+  await waitUntilComplete(state.tabId);
+  await ensureContentScript(state.tabId);
+
+  // Label the rows with whatever the page's own search box says, so the
+  // export still shows where the jobs came from.
+  let row = { searchText: '', location: '' };
+  try {
+    const info = await sendToTab(state.tabId, { type: 'PAGE_INFO' });
+    if (info && info.ok) {
+      row = { searchText: info.keyword || '', location: info.location || '' };
+    }
+  } catch (e) { /* labels are optional */ }
+
+  report({ log: '   ⇢ ' + (picked.tab.title || picked.tab.url || 'current page') });
+
+  const jobs = await scrapePages(state.tabId, row);
+  state.results.push.apply(state.results, jobs);
+  state.currentRow = 1;
+  state.doneRows = jobs.length ? 1 : 0;
+
+  if (jobs.length) report({ log: '   ✓ ' + jobs.length + ' job(s) captured' });
+  return jobs.length;
 }
 
 /* ---------------------------------------------------------------------
@@ -485,7 +552,20 @@ async function processRow(row) {
     await gotoUrl(tabId, buildFallbackUrl(row.searchText, row.location));
   }
 
-  // --- 4. Scrape page 1, then optional extra pages --------------------
+  // --- 4. Scrape page 1, then any extra pages -------------------------
+  return scrapePages(tabId, row);
+}
+
+/* ---------------------------------------------------------------------
+ * Scrape the results page the tab is currently on, then follow the
+ * pagination strip for up to `state.maxPages` pages. Shared by the CSV
+ * flow and by "Just Scrape".
+ *
+ * @param {number} tabId
+ * @param {{searchText: string, location: string}} row labels for the CSV
+ * @returns {Promise<Array>} the jobs collected across those pages
+ * ------------------------------------------------------------------- */
+async function scrapePages(tabId, row) {
   const collected = [];
   let resultsUrl = (await getTab(tabId) || {}).url || '';
   let nextUrl = null;          // resolved from the page we are standing on
@@ -644,7 +724,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: false, error: 'A scrape is already running.' });
         return;
       }
-      if (!msg.payload || !msg.payload.rows || !msg.payload.rows.length) {
+      // "Just Scrape" needs no rows — it reads the open page.
+      if (!msg.payload ||
+          (msg.payload.mode !== 'current' &&
+           (!msg.payload.rows || !msg.payload.rows.length))) {
         sendResponse({ ok: false, error: 'No rows supplied.' });
         return;
       }

@@ -32,6 +32,16 @@ Accountant,Saudi Arabia
 * Leave `Location` blank to search **all locations**; leave `Search_Text` blank to list every job in a country.
 * Quoted fields, embedded commas, `""` escapes, CRLF and a UTF-8 BOM are all handled.
 
+### Just Scrape — no CSV
+
+Pick **Just Scrape — Current Page** when you have already searched on Bayt yourself and simply want the
+results exported. Open the results page, press **Scrape Bayt**, and the extension reads that page — no typing,
+no navigation, no CSV. The `Search_Text` / `Search_Location` columns are filled from the page's own search box
+so the export still shows what the jobs were a search for.
+
+Set **Pagination** above 1 to keep walking on from there. If no Bayt tab is open the run stops with
+*"Open a Bayt results page first"* rather than opening one and guessing what you wanted.
+
 ### Default input file
 
 If you start a run **without uploading anything**, the extension reads **`input.csv` from its own folder**.
@@ -44,7 +54,7 @@ overrides it for that session.
 
 | Control | What it does |
 | --- | --- |
-| **Scrape Mode** | *First Page* scrapes page 1 only. *Multi Page* also walks `?page=2…N`. |
+| **Scrape Mode** | *First Page* — one page per CSV row. *Multi Page* — several pages per CSV row. *Just Scrape* — no CSV at all: reads the Bayt page you already have open. |
 | **Input CSV** | Choose a file, or drag one onto the button. `KW` / `LOC` show how many distinct keywords and locations were parsed. |
 | **Pagination** | Pages per search (Multi Page mode only). |
 | **Delay (sec)** | Minimum pause between actions; the actual pause is randomised between this and +2 s. |
