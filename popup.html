@@ -22,7 +22,7 @@
     body {
       width: 386px;
       margin: 0;
-      padding: 12px;
+      padding: 10px;
       background: #fbfcfe;
       font-family: "Segoe UI", Roboto, Arial, sans-serif;
       font-size: 13px;
@@ -30,22 +30,22 @@
     }
 
     /* ---------------------------- Header ---------------------------- */
-    .app-head { display: flex; align-items: center; gap: 9px; padding: 2px 4px 12px; }
-    .app-head img { width: 26px; height: 26px; border-radius: 7px; }
-    .app-head h1 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: -.2px; }
+    .app-head { display: flex; align-items: center; gap: 8px; padding: 0 4px 8px; }
+    .app-head img { width: 22px; height: 22px; border-radius: 6px; }
+    .app-head h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: -.2px; }
 
     /* ----------------------------- Cards ---------------------------- */
     .card {
       background: #fff;
       border: 1px solid var(--line);
       border-radius: 10px;
-      padding: 13px 14px;
-      margin-bottom: 11px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
       box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
     }
     .card-label {
       font-size: 10.5px; font-weight: 700; letter-spacing: .9px;
-      color: var(--brand); text-transform: uppercase; margin-bottom: 11px;
+      color: var(--brand); text-transform: uppercase; margin-bottom: 8px;
     }
 
     /* ------------------------ Stats strip --------------------------- */
@@ -59,36 +59,32 @@
       font-size: 9.5px; font-weight: 700; letter-spacing: .8px;
       color: var(--mute); text-transform: uppercase;
     }
-    .stat .v { font-size: 19px; font-weight: 600; margin-top: 3px; line-height: 1.1; }
+    .stat .v { font-size: 17px; font-weight: 600; margin-top: 2px; line-height: 1.1; }
     .stat .v.ok  { color: var(--ok); }
     .stat .v.err { color: var(--err); }
 
     /* ------------------------- Progress ----------------------------- */
-    .prog-row { display: flex; align-items: center; gap: 10px; margin-top: 13px; }
-    .track {
-      flex: 1; height: 13px; border-radius: 4px;
-      background: var(--soft); overflow: hidden; display: flex;
-    }
-    .track .fill { background: var(--brand); width: 0%; transition: width .3s ease; }
-    .prog-txt { font-size: 11.5px; color: var(--mute); white-space: nowrap; }
+    .prog-row { display: flex; align-items: center; gap: 10px; margin-top: 9px; }
+    .prog-txt { font-size: 11px; color: var(--mute); white-space: nowrap; }
     .prog-txt b { color: var(--ink); font-weight: 600; }
 
+    /* One bar carries all three states: done | error | pending remainder. */
     .seg-track {
-      height: 7px; border-radius: 4px; background: var(--pend);
-      overflow: hidden; display: flex; margin-top: 9px;
+      flex: 1; height: 10px; border-radius: 4px; background: var(--pend);
+      overflow: hidden; display: flex;
     }
     .seg-track span { display: block; height: 100%; transition: width .3s ease; }
     .seg-done { background: var(--ok); }
     .seg-err  { background: var(--err); }
 
     .legend {
-      display: flex; justify-content: center; gap: 16px;
-      margin-top: 9px; font-size: 10.5px; color: var(--mute);
+      display: flex; justify-content: center; gap: 14px;
+      margin-top: 7px; font-size: 10px; color: var(--mute);
     }
     .legend i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 5px; }
 
     /* ------------------------- Form rows ---------------------------- */
-    .frow { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; }
+    .frow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
     .frow:last-of-type { margin-bottom: 0; }
     .frow > label.cap {
       font-size: 12px; color: #3d4759; white-space: nowrap; flex: 0 0 auto;
@@ -98,13 +94,13 @@
       border: 1px solid var(--line); border-radius: 7px; background: #fff;
       font-family: inherit; font-size: 12.5px; color: var(--ink);
     }
-    select { flex: 1; padding: 8px 9px; cursor: pointer; }
+    select { flex: 1; padding: 6px 8px; cursor: pointer; }
     select:focus, input:focus { outline: 2px solid #dbe6fd; outline-offset: -1px; }
 
     /* CSV chooser + badges */
     .file-btn {
       display: inline-flex; align-items: center; gap: 6px;
-      padding: 7px 11px; cursor: pointer; font-weight: 500; color: #33405a;
+      padding: 6px 10px; cursor: pointer; font-weight: 500; color: #33405a;
     }
     .file-btn:hover { background: var(--soft); }
     .file-btn.drag { border-color: var(--brand); background: #eef4ff; }
@@ -116,15 +112,15 @@
       color: #33405a; font-weight: 600; font-size: 10.5px;
     }
     #fileName {
-      font-size: 10.5px; color: var(--mute); margin: -4px 0 11px 2px;
+      font-size: 10.5px; color: var(--mute); margin: -3px 0 8px 2px;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
 
     /* Number pills: caption left, value right (2-up grid) */
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 11px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 8px; }
     .pill {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 7px 5px 7px 11px; background: var(--soft); min-height: 36px;
+      padding: 5px 5px 5px 10px; background: var(--soft); min-height: 30px;
     }
     .pill span {
       font-size: 10px; font-weight: 700; letter-spacing: .5px;
@@ -137,16 +133,19 @@
     }
     .pill.off { opacity: .5; }
 
-    /* Checkbox row */
-    .check { display: flex; align-items: center; margin-bottom: 12px; }
-    .check label { font-size: 12px; color: #3d4759; }
-    .check input { margin-left: auto; width: 15px; height: 15px; accent-color: var(--brand); }
+    /* Checkbox row: both options share one line to save vertical space */
+    .checks { display: flex; gap: 16px; margin: 2px 0 9px; }
+    .chk {
+      display: flex; align-items: center; gap: 6px; cursor: pointer;
+      font-size: 11.5px; color: #3d4759; white-space: nowrap;
+    }
+    .chk input { width: 14px; height: 14px; accent-color: var(--brand); margin: 0; }
 
     /* ---------------------------- Buttons --------------------------- */
-    .actions { display: flex; gap: 9px; }
+    .actions { display: flex; gap: 8px; margin-top: 2px; }
     button {
       display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-      padding: 9px 14px; border-radius: 7px; border: 1px solid transparent;
+      padding: 7px 13px; border-radius: 7px; border: 1px solid transparent;
       font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
     }
     #startBtn { background: var(--brand); color: #fff; flex: 0 0 auto; }
@@ -158,7 +157,7 @@
     /* ---------------------------- Footer ---------------------------- */
     .foot {
       display: flex; align-items: center; justify-content: center; gap: 10px;
-      padding-top: 12px; margin-top: 12px; border-top: 1px solid var(--line);
+      padding-top: 8px; margin-top: 8px; border-top: 1px solid var(--line);
       font-size: 12px;
     }
     .link {
@@ -170,13 +169,13 @@
     .dot { color: var(--pend); }
 
     /* --------------------------- Log panel -------------------------- */
-    #status { font-size: 11.5px; font-weight: 600; margin-top: 11px; min-height: 15px; }
+    #status { font-size: 11.5px; font-weight: 600; margin-top: 8px; min-height: 14px; }
     #status.ok  { color: var(--ok); }
     #status.err { color: var(--err); }
     #log {
-      margin-top: 8px; max-height: 112px; overflow-y: auto;
-      background: var(--soft); border-radius: 7px; padding: 8px 10px;
-      font-size: 10.5px; line-height: 1.6; color: #4b5563;
+      margin-top: 6px; max-height: 64px; overflow-y: auto;
+      background: var(--soft); border-radius: 7px; padding: 6px 9px;
+      font-size: 10.5px; line-height: 1.5; color: #4b5563;
       font-family: Consolas, "Courier New", monospace; white-space: pre-wrap;
     }
     #log:empty { display: none; }
@@ -202,13 +201,11 @@
     </div>
 
     <div class="prog-row">
-      <div class="track"><div class="fill" id="bar"></div></div>
+      <div class="seg-track">
+        <span class="seg-done" id="segDone" style="width:0%"></span>
+        <span class="seg-err"  id="segErr"  style="width:0%"></span>
+      </div>
       <div class="prog-txt"><b id="pDone">0</b>/<b id="pTotal">0</b> <span id="pState">Stopped</span></div>
-    </div>
-
-    <div class="seg-track">
-      <span class="seg-done" id="segDone" style="width:0%"></span>
-      <span class="seg-err"  id="segErr"  style="width:0%"></span>
     </div>
 
     <div class="legend">
@@ -268,14 +265,13 @@
       </label>
     </div>
 
-    <div class="check">
-      <label for="withDetails">Open each job for full description</label>
-      <input type="checkbox" id="withDetails" />
-    </div>
-
-    <div class="check">
-      <label for="bgTab">Run in a background tab</label>
-      <input type="checkbox" id="bgTab" />
+    <div class="checks">
+      <label class="chk" for="withDetails" title="Open every job and capture its full description">
+        <input type="checkbox" id="withDetails" /> Full job description
+      </label>
+      <label class="chk" for="bgTab" title="Keep the automated tab unfocused">
+        <input type="checkbox" id="bgTab" /> Background tab
+      </label>
     </div>
 
     <!-- Run / stop -------------------------------------------------- -->

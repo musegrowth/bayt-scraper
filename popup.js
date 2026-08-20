@@ -383,10 +383,8 @@ function render(p) {
   if (typeof p.errorRows === 'number')   $('cErrors').textContent = errors;
   if (typeof p.jobCount  === 'number')   $('cJobs').textContent = p.jobCount;
 
-  // Blue bar = rows attempted; segmented bar = done / error / pending.
+  // One bar, three states: done | error | the pending remainder showing through.
   if (total > 0) {
-    const attempted = Math.min(total, done + errors);
-    $('bar').style.width     = (attempted / total * 100) + '%';
     $('segDone').style.width = (done   / total * 100) + '%';
     $('segErr').style.width  = (errors / total * 100) + '%';
   }
