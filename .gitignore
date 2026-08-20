@@ -1,0 +1,11 @@
+# Local reference screenshots (browser captures, not part of the extension)
+Image/
+
+# Scraper output
+bayt-jobs-*.csv
+
+# OS / editor noise
+Thumbs.db
+desktop.ini
+.DS_Store
+*.tmp.html

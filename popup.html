@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bayt Job Scraper</title>
+  <style>
+    /* ------------------------------------------------------------------
+       All styling is inline: Manifest V3's CSP blocks remote stylesheets.
+    ------------------------------------------------------------------ */
+    :root {
+      --brand:      #2563eb;
+      --brand-dark: #1d4ed8;
+      --ink:        #111827;
+      --mute:       #8a94a6;
+      --line:       #e6e9ef;
+      --soft:       #f4f6f9;
+      --ok:         #16a34a;
+      --err:        #dc2626;
+      --pend:       #cbd2dc;
+    }
+    * { box-sizing: border-box; }
+    body {
+      width: 386px;
+      margin: 0;
+      padding: 12px;
+      background: #fbfcfe;
+      font-family: "Segoe UI", Roboto, Arial, sans-serif;
+      font-size: 13px;
+      color: var(--ink);
+    }
+
+    /* ---------------------------- Header ---------------------------- */
+    .app-head { display: flex; align-items: center; gap: 9px; padding: 2px 4px 12px; }
+    .app-head img { width: 26px; height: 26px; border-radius: 7px; }
+    .app-head h1 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: -.2px; }
+
+    /* ----------------------------- Cards ---------------------------- */
+    .card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 13px 14px;
+      margin-bottom: 11px;
+      box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+    }
+    .card-label {
+      font-size: 10.5px; font-weight: 700; letter-spacing: .9px;
+      color: var(--brand); text-transform: uppercase; margin-bottom: 11px;
+    }
+
+    /* ------------------------ Stats strip --------------------------- */
+    .stats { display: flex; text-align: center; }
+    .stat { flex: 1; position: relative; }
+    .stat + .stat::before {
+      content: ''; position: absolute; left: 0; top: 4px; bottom: 4px;
+      width: 1px; background: var(--line);
+    }
+    .stat .k {
+      font-size: 9.5px; font-weight: 700; letter-spacing: .8px;
+      color: var(--mute); text-transform: uppercase;
+    }
+    .stat .v { font-size: 19px; font-weight: 600; margin-top: 3px; line-height: 1.1; }
+    .stat .v.ok  { color: var(--ok); }
+    .stat .v.err { color: var(--err); }
+
+    /* ------------------------- Progress ----------------------------- */
+    .prog-row { display: flex; align-items: center; gap: 10px; margin-top: 13px; }
+    .track {
+      flex: 1; height: 13px; border-radius: 4px;
+      background: var(--soft); overflow: hidden; display: flex;
+    }
+    .track .fill { background: var(--brand); width: 0%; transition: width .3s ease; }
+    .prog-txt { font-size: 11.5px; color: var(--mute); white-space: nowrap; }
+    .prog-txt b { color: var(--ink); font-weight: 600; }
+
+    .seg-track {
+      height: 7px; border-radius: 4px; background: var(--pend);
+      overflow: hidden; display: flex; margin-top: 9px;
+    }
+    .seg-track span { display: block; height: 100%; transition: width .3s ease; }
+    .seg-done { background: var(--ok); }
+    .seg-err  { background: var(--err); }
+
+    .legend {
+      display: flex; justify-content: center; gap: 16px;
+      margin-top: 9px; font-size: 10.5px; color: var(--mute);
+    }
+    .legend i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+
+    /* ------------------------- Form rows ---------------------------- */
+    .frow { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; }
+    .frow:last-of-type { margin-bottom: 0; }
+    .frow > label.cap {
+      font-size: 12px; color: #3d4759; white-space: nowrap; flex: 0 0 auto;
+    }
+
+    select, .pill, .file-btn {
+      border: 1px solid var(--line); border-radius: 7px; background: #fff;
+      font-family: inherit; font-size: 12.5px; color: var(--ink);
+    }
+    select { flex: 1; padding: 8px 9px; cursor: pointer; }
+    select:focus, input:focus { outline: 2px solid #dbe6fd; outline-offset: -1px; }
+
+    /* CSV chooser + badges */
+    .file-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 11px; cursor: pointer; font-weight: 500; color: #33405a;
+    }
+    .file-btn:hover { background: var(--soft); }
+    .file-btn.drag { border-color: var(--brand); background: #eef4ff; }
+    input[type="file"] { display: none; }
+    .badges { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+    .badge { font-size: 10.5px; color: var(--mute); display: inline-flex; align-items: center; gap: 5px; }
+    .badge b {
+      background: var(--soft); border-radius: 99px; padding: 2px 8px;
+      color: #33405a; font-weight: 600; font-size: 10.5px;
+    }
+    #fileName {
+      font-size: 10.5px; color: var(--mute); margin: -4px 0 11px 2px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* Number pills: caption left, value right (2-up grid) */
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 11px; }
+    .pill {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 7px 5px 7px 11px; background: var(--soft); min-height: 36px;
+    }
+    .pill span {
+      font-size: 10px; font-weight: 700; letter-spacing: .5px;
+      color: var(--mute); text-transform: uppercase; white-space: nowrap;
+    }
+    .pill input {
+      width: 54px; border: 0; background: transparent; text-align: right;
+      font-family: inherit; font-size: 13px; font-weight: 600; color: var(--ink);
+      padding: 0 4px 0 0;
+    }
+    .pill.off { opacity: .5; }
+
+    /* Checkbox row */
+    .check { display: flex; align-items: center; margin-bottom: 12px; }
+    .check label { font-size: 12px; color: #3d4759; }
+    .check input { margin-left: auto; width: 15px; height: 15px; accent-color: var(--brand); }
+
+    /* ---------------------------- Buttons --------------------------- */
+    .actions { display: flex; gap: 9px; }
+    button {
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      padding: 9px 14px; border-radius: 7px; border: 1px solid transparent;
+      font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    #startBtn { background: var(--brand); color: #fff; flex: 0 0 auto; }
+    #startBtn:hover:enabled { background: var(--brand-dark); }
+    #stopBtn  { background: #fff; border-color: var(--line); color: #5b6577; }
+    #stopBtn:hover:enabled { background: var(--soft); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* ---------------------------- Footer ---------------------------- */
+    .foot {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      padding-top: 12px; margin-top: 12px; border-top: 1px solid var(--line);
+      font-size: 12px;
+    }
+    .link {
+      background: none; border: 0; padding: 3px 4px; cursor: pointer;
+      color: var(--mute); font-size: 12px; font-weight: 500;
+      display: inline-flex; align-items: center; gap: 5px;
+    }
+    .link:hover:enabled { color: var(--brand); }
+    .dot { color: var(--pend); }
+
+    /* --------------------------- Log panel -------------------------- */
+    #status { font-size: 11.5px; font-weight: 600; margin-top: 11px; min-height: 15px; }
+    #status.ok  { color: var(--ok); }
+    #status.err { color: var(--err); }
+    #log {
+      margin-top: 8px; max-height: 112px; overflow-y: auto;
+      background: var(--soft); border-radius: 7px; padding: 8px 10px;
+      font-size: 10.5px; line-height: 1.6; color: #4b5563;
+      font-family: Consolas, "Courier New", monospace; white-space: pre-wrap;
+    }
+    #log:empty { display: none; }
+    svg { flex: 0 0 auto; }
+  </style>
+</head>
+<body>
+
+  <div class="app-head">
+    <img src="icons/icon48.png" alt="" />
+    <h1>Bayt Job Scraper</h1>
+  </div>
+
+  <!-- ===================== STATUS CARD ============================== -->
+  <div class="card">
+    <div class="card-label">Bayt.com</div>
+
+    <div class="stats">
+      <div class="stat"><div class="k">Input</div>   <div class="v" id="cInput">0</div></div>
+      <div class="stat"><div class="k">Done</div>    <div class="v" id="cDone">0</div></div>
+      <div class="stat"><div class="k">Stored</div>  <div class="v ok"  id="cJobs">0</div></div>
+      <div class="stat"><div class="k">Errors</div>  <div class="v err" id="cErrors">0</div></div>
+    </div>
+
+    <div class="prog-row">
+      <div class="track"><div class="fill" id="bar"></div></div>
+      <div class="prog-txt"><b id="pDone">0</b>/<b id="pTotal">0</b> <span id="pState">Stopped</span></div>
+    </div>
+
+    <div class="seg-track">
+      <span class="seg-done" id="segDone" style="width:0%"></span>
+      <span class="seg-err"  id="segErr"  style="width:0%"></span>
+    </div>
+
+    <div class="legend">
+      <span><i style="background:var(--ok)"></i>Done</span>
+      <span><i style="background:var(--err)"></i>Error</span>
+      <span><i style="background:var(--pend)"></i>Pending</span>
+    </div>
+  </div>
+
+  <!-- ===================== CONTROLS CARD ============================ -->
+  <div class="card">
+    <!-- Mode ------------------------------------------------------- -->
+    <div class="frow">
+      <label class="cap" for="mode">Scrape Mode:</label>
+      <select id="mode">
+        <option value="single">Job Listings — First Page</option>
+        <option value="multi">Job Listings — Multi Page</option>
+      </select>
+    </div>
+
+    <!-- CSV input -------------------------------------------------- -->
+    <div class="frow">
+      <label class="file-btn" id="fileDrop" for="csvFile">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        Input CSV
+      </label>
+      <input type="file" id="csvFile" accept=".csv,text/csv" />
+      <div class="badges">
+        <span class="badge">KW: <b id="bKw">0</b></span>
+        <span class="badge">LOC: <b id="bLoc">0</b></span>
+      </div>
+    </div>
+    <div id="fileName">Loading input.csv…</div>
+
+    <!-- Numeric options -------------------------------------------- -->
+    <div class="grid">
+      <label class="pill off" id="pillPages">
+        <span>Pagination</span>
+        <input type="number" id="maxPages" min="1" max="50" value="1" disabled />
+      </label>
+      <label class="pill">
+        <span>Delay (sec)</span>
+        <input type="number" id="minDelay" min="1" max="30" step="0.5" value="2" />
+      </label>
+      <label class="pill">
+        <span>Start</span>
+        <input type="number" id="startRow" min="1" value="1" />
+      </label>
+      <label class="pill">
+        <span>End</span>
+        <input type="number" id="endRow" min="1" value="1" />
+      </label>
+    </div>
+
+    <div class="check">
+      <label for="bgTab">Run in a background tab</label>
+      <input type="checkbox" id="bgTab" />
+    </div>
+
+    <!-- Run / stop -------------------------------------------------- -->
+    <div class="actions">
+      <button id="startBtn" disabled>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Scrape Bayt
+      </button>
+      <button id="stopBtn" disabled>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+          <rect x="5" y="5" width="14" height="14" rx="2"/>
+        </svg>
+        Stop
+      </button>
+    </div>
+
+    <div id="status">Waiting for a CSV file…</div>
+    <div id="log"></div>
+
+    <!-- Footer actions ---------------------------------------------- -->
+    <div class="foot">
+      <button class="link" id="downloadBtn" disabled>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Download
+      </button>
+      <span class="dot">•</span>
+      <button class="link" id="clearBtn" disabled>Clear Data</button>
+    </div>
+  </div>
+
+  <!-- No CDN: MV3 forbids remote scripts, so popup.js carries its own
+       dependency-free CSV parser instead of PapaParse. -->
+  <script src="popup.js"></script>
+</body>
+</html>
