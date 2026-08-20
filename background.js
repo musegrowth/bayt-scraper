@@ -236,7 +236,11 @@ async function waitForNavigation(tabId, prevUrl, requireChange = true) {
     const tab = await getTab(tabId);
     if (!tab) throw new Error('The Bayt tab was closed.');
 
+    // A URL change is the usual signal, but re-running the very same
+    // search lands on the same URL — so a load cycle counts too.
     if (tab.url && tab.url !== prevUrl) sawChange = true;
+    if (tab.status === 'loading') sawChange = true;
+
     if (sawChange && tab.status === 'complete') {
       await sleep(900);          // let late XHR-rendered content settle
       return tab;
@@ -339,9 +343,11 @@ async function runScrape(payload) {
     state.tabId = picked.tab.id;
 
     if (picked.reused) {
+      // Leave the page where it is — if it already carries the search
+      // widget (results pages do), processRow() searches straight from it.
       report({ log: '   ↻ Reusing the open Bayt tab' });
       if (!state.backgroundTab) await updateTab(state.tabId, { active: true });
-      await gotoUrl(state.tabId, BAYT_HOME);
+      await waitUntilComplete(state.tabId);
     } else {
       await waitUntilComplete(state.tabId);
     }
@@ -410,11 +416,34 @@ async function processRow(row) {
   const tabId = state.tabId;
   let usedFallback = false;
 
-  // --- 1. Land on the Bayt home page (its header carries the search
-  //        widget: /html/body/header/div[2]). Already there? Refresh, so
-  //        the previous row's keyword/location can't leak into this one.
-  await gotoUrl(tabId, BAYT_HOME);
-  await ensureContentScript(tabId);
+  // --- 1. Get to a page that carries the search widget ----------------
+  // The widget lives in the header of the home page *and* of every results
+  // page, so once a search has run we keep searching from where we are
+  // instead of loading the home page again for every row.
+  //
+  // The exception is a row with a blank keyword or blank location: the
+  // widget would still hold the previous row's value with nothing typed
+  // over it, so those rows start from the home page's clean widget.
+  const needsCleanWidget = !row.searchText || !row.location;
+  let searchInPlace = false;
+
+  if (!needsCleanWidget && isBaytUrl((await getTab(tabId) || {}).url)) {
+    try {
+      await ensureContentScript(tabId);
+      const widget = await sendToTab(tabId, { type: 'HAS_WIDGET' });
+      searchInPlace = !!(widget && widget.ok && widget.hasWidget);
+    } catch (e) {
+      searchInPlace = false;      // fall back to the home page below
+    }
+  }
+
+  if (searchInPlace) {
+    report({ log: '   ⇢ Searching from the current page' });
+  } else {
+    await gotoUrl(tabId, BAYT_HOME);
+    await ensureContentScript(tabId);
+  }
+
   await humanDelay(600, 1200);
 
   // --- 2. Fill the search box + pick the location from the dropdown ---

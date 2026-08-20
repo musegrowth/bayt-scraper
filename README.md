@@ -102,8 +102,12 @@ click **Find jobs** → wait for the results page → scrape → optional extra 
 
 ### Behaviour worth knowing
 
-* **Existing tab is reused.** If a bayt.com tab is already open (or is your active tab), it is refreshed and
-  driven instead of opening a new one. Only if none exists is a tab created.
+* **Existing tab is reused.** If a bayt.com tab is already open (or is your active tab), it is driven directly
+  instead of opening a new one. Only if none exists is a tab created.
+* **Searches run from wherever you are.** The quick-search widget sits in the header of results pages too, so
+  after the first search each row is typed straight into the page already on screen — no return trip to the home
+  page. Rows with a blank keyword *or* a blank location are the exception: those start from the home page, whose
+  widget is clean, so the previous row's value cannot linger in the field nothing is typed over.
 * **Human-ish pacing.** Typing is per-character with jitter; pauses between steps are randomised (default 2–4 s).
 * **Cookie banner** ("We value your privacy") is dismissed automatically when present.
 * **Two autocompletes.** `#text_search` has its own suggestion list using the *same* `a[data-highlight]` markup

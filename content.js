@@ -629,6 +629,15 @@
       return;
     }
 
+    if (msg.type === 'HAS_WIDGET') {
+      // The quick-search widget sits in the header of the home page AND of
+      // every results page, so a search can start from either.
+      const input = pick(SEL.searchInput) || byXPath(XP.searchInput);
+      const btn   = pick(SEL.submitButton) || byXPath(XP.submitButton);
+      sendResponse({ ok: true, hasWidget: !!(input && btn && isVisible(input)) });
+      return;
+    }
+
     if (msg.type === 'PAGE_URL') {
       // Which URL serves result page N? url === null with linkCount > 0
       // means the strip exists and there is simply no such page.
