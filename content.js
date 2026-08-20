@@ -74,6 +74,16 @@
     cardSummary: ['.jb-descr', '[class*="jb-descr"]', 'div.m10t.t-small'],
     cardDate:    ['.jb-date', '[class*="jb-date"]', 'div.jb-date span'],
 
+    // --- Job detail panel (opens when a card is clicked) ----------------
+    // The panel is server-rendered into the right-hand column and carries
+    // stable data-* hooks, so a panel can be matched to the card that
+    // opened it rather than merely assumed to belong to it.
+    detailDescription: ['[data-jb-field="description"]'],
+    detailSkills:      ['[data-jb-field="skills"]'],
+    detailLabels:      ['#labelsSection'],
+    detailJobIdLink:   ['#applicant-compare', 'a[href*="jobId="]'],
+    detailPreferredHeading: 'h3',          // "Preferred candidate"
+
     // --- Pagination -----------------------------------------------------
     // <ul id="pagination"> … <li><a class="jsAjaxLoad"
     //   href="/en/uae/jobs/graphic-designer-jobs/?page=2">2</a></li> … </ul>
@@ -495,7 +505,7 @@
     const job = {
       title: 'N/A', url: 'N/A', company: 'N/A', location: 'N/A',
       careerLevel: 'N/A', experience: 'N/A', remote: 'No', otherInfo: 'N/A',
-      summary: 'N/A', date: 'N/A'
+      summary: 'N/A', date: 'N/A', details: 'N/A'
     };
 
     // --- Title + URL ---------------------------------------------------
@@ -534,6 +544,168 @@
     return job;
   }
 
+  /* ===================================================================
+   * JOB DETAIL PANEL
+   * ================================================================= */
+
+  /**
+   * Flatten a rich-text block (<p>, <ul>, <b>, <br>…) into plain text that
+   * survives a CSV cell: paragraphs separated by blank lines, list items
+   * prefixed with a bullet. innerText is not used because it drops the
+   * bullet markers.
+   */
+  function htmlToText(root) {
+    if (!root) return '';
+    const out = [];
+
+    const walk = (node) => {
+      node.childNodes.forEach((n) => {
+        if (n.nodeType === 3) {                       // text node
+          out.push(n.nodeValue.replace(/\s+/g, ' '));
+          return;
+        }
+        if (n.nodeType !== 1) return;
+
+        const tag = n.tagName.toLowerCase();
+        if (tag === 'script' || tag === 'style') return;
+
+        if (tag === 'br') { out.push('\n'); return; }
+        if (tag === 'li') { out.push('\n• '); walk(n); return; }
+
+        if (/^(p|div|ul|ol|h[1-6]|tr|table|section|dl|dt|dd)$/.test(tag)) {
+          out.push('\n'); walk(n); out.push('\n');
+          return;
+        }
+        walk(n);                                      // inline: b, span, a…
+      });
+    };
+
+    walk(root);
+
+    return out.join('')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/ *\n */g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  /** The job id the detail panel is currently showing, or null. */
+  function panelJobId() {
+    const a = pick(SEL.detailJobIdLink);
+    const m = a && String(a.getAttribute('href') || '').match(/jobId=(\d+)/);
+    return m ? m[1] : null;
+  }
+
+  /** The job id encoded in a card's URL (the trailing number), or null. */
+  function cardJobId(url) {
+    const m = String(url || '').match(/(\d{4,})/g);
+    return m ? m[m.length - 1] : null;
+  }
+
+  /** Cheap fingerprint of the panel, used when no job id is exposed. */
+  function panelSignature() {
+    const d = pick(SEL.detailDescription);
+    return (panelJobId() || '') + '|' + (d ? clean(d.textContent).slice(0, 120) : '');
+  }
+
+  /**
+   * Read the open detail panel into one formatted block:
+   *
+   *   Dhahran, Saudi Arabia | Full time · No experience required | Accounting
+   *
+   *   JOB DESCRIPTION
+   *   …
+   *
+   *   SKILLS
+   *   …
+   *
+   *   PREFERRED CANDIDATE
+   *   Years of experience: …
+   */
+  function extractDetails() {
+    const parts = [];
+
+    // Label strip: location / type+experience / industry.
+    try {
+      const labels = pick(SEL.detailLabels);
+      if (labels) {
+        const bits = Array.from(labels.querySelectorAll('[data-automation-id]'))
+          .map((d) => clean(d.innerText || d.textContent))
+          .filter(Boolean);
+        if (bits.length) parts.push(bits.join(' | '));
+      }
+    } catch (e) { /* optional */ }
+
+    try {
+      const desc = htmlToText(pick(SEL.detailDescription));
+      if (desc) parts.push('JOB DESCRIPTION\n' + desc);
+    } catch (e) { /* optional */ }
+
+    try {
+      const skills = htmlToText(pick(SEL.detailSkills));
+      if (skills) parts.push('SKILLS\n' + skills);
+    } catch (e) { /* optional */ }
+
+    // "Preferred candidate" is a run of label/value rows after that heading.
+    try {
+      const heading = Array.from(document.querySelectorAll(SEL.detailPreferredHeading))
+        .find((h) => /preferred candidate/i.test(clean(h.textContent)));
+
+      if (heading) {
+        const rows = [];
+        let node = heading.nextElementSibling;
+
+        while (node && !/^h[1-6]$/i.test(node.tagName)) {
+          const cols = node.querySelectorAll(':scope > div');
+          if (cols.length >= 2) {
+            const k = clean(cols[0].innerText || cols[0].textContent);
+            const v = clean(cols[1].innerText || cols[1].textContent);
+            if (k && v) rows.push(k + ': ' + v);
+          }
+          node = node.nextElementSibling;
+        }
+        if (rows.length) parts.push('PREFERRED CANDIDATE\n' + rows.join('\n'));
+      }
+    } catch (e) { /* optional */ }
+
+    return parts.join('\n\n').trim();
+  }
+
+  /**
+   * Click one job card and wait for its detail panel.
+   *
+   * The card element is clicked rather than its title link: the link would
+   * navigate away, while the card carries Bayt's own handler that swaps the
+   * panel in place. Success is confirmed by matching the panel's jobId to
+   * the card's own id, so a stale panel is never read as this job's data.
+   *
+   * @returns {Promise<string>} the formatted details, or '' on failure
+   */
+  async function openCardDetails(li, url) {
+    const wantedId = cardJobId(url);
+    const before = panelSignature();
+
+    // Already showing this job (Bayt opens the first card by default)?
+    if (wantedId && panelJobId() === wantedId) return extractDetails();
+
+    li.scrollIntoView({ block: 'center' });
+    await rand(150, 350);
+    realClick(li);
+
+    const ready = await waitFor(() => {
+      if (wantedId) {
+        const pid = panelJobId();
+        return pid && pid === wantedId ? true : null;   // exact match
+      }
+      const sig = panelSignature();
+      return sig && sig !== before ? true : null;        // fallback: changed
+    }, 12000);
+
+    if (!ready) return '';
+    await rand(250, 500);          // let the panel finish rendering
+    return extractDetails();
+  }
+
   /**
    * Resolve the absolute URL of a given result page from the pagination
    * strip, rather than guessing at "?page=N" — this keeps any filters
@@ -567,13 +739,14 @@
     }
   }
 
-  async function scrapePage() {
+  async function scrapePage(withDetails) {
     // Give the results list a chance to appear before reading it.
     await waitFor(() => (getJobCards().length ? true : null), 15000);
     await autoScroll();
 
     const cards = getJobCards();
     const jobs = [];
+    const nodes = [];            // the <li> each job came from
     const seen = new Set();
 
     cards.forEach((li) => {
@@ -584,10 +757,35 @@
         if (seen.has(key)) return;                              // de-duplicate
         seen.add(key);
         jobs.push(job);
+        nodes.push(li);
       } catch (e) {
         // One malformed card must never abort the page.
       }
     });
+
+    // Optional second pass: open each card and read its full description.
+    if (withDetails && jobs.length) {
+      window.__baytScraperStop = false;        // background sets this on Stop
+
+      for (let i = 0; i < jobs.length; i++) {
+        if (window.__baytScraperStop) break;   // leave the rest as N/A
+        // Let the orchestrator show progress — this pass is slow by nature.
+        try {
+          chrome.runtime.sendMessage({
+            type: 'DETAIL_PROGRESS', index: i + 1, total: jobs.length
+          }, () => void chrome.runtime.lastError);
+        } catch (e) { /* the popup may be closed */ }
+
+        try {
+          const text = await openCardDetails(nodes[i], jobs[i].url);
+          jobs[i].details = text || 'N/A';
+        } catch (e) {
+          jobs[i].details = 'N/A';      // one unreadable panel is not fatal
+        }
+
+        await rand(700, 1400);          // human pacing between clicks
+      }
+    }
 
     return jobs;
   }
@@ -667,7 +865,7 @@
       (async () => {
         try {
           dismissCookieBanner();
-          const jobs = await scrapePage();
+          const jobs = await scrapePage(msg.withDetails);
           sendResponse({ ok: true, jobs: jobs, url: location.href });
         } catch (err) {
           sendResponse({ ok: false, error: err.message, jobs: [] });

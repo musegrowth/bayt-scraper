@@ -26,6 +26,7 @@ const minDelayEl  = $('minDelay');
 const startRowEl  = $('startRow');
 const endRowEl    = $('endRow');
 const bgTabEl     = $('bgTab');
+const detailsEl   = $('withDetails');
 const startBtn    = $('startBtn');
 const stopBtn     = $('stopBtn');
 const downloadBtn = $('downloadBtn');
@@ -298,7 +299,8 @@ startBtn.addEventListener('click', () => {
         : 1,
       minDelay: minDelay,
       maxDelay: minDelay + 2000,        // "2-4 seconds" style human jitter
-      backgroundTab: bgTabEl.checked
+      backgroundTab: bgTabEl.checked,
+      withDetails: detailsEl.checked
     }
   }, (res) => {
     if (chrome.runtime.lastError) {
@@ -350,6 +352,7 @@ function lockUI(running) {
   startRowEl.disabled = running || just;
   endRowEl.disabled   = running || just;
   bgTabEl.disabled    = running;
+  detailsEl.disabled  = running;
   maxPagesEl.disabled = running || !(modeSel.value === 'multi' || just);
   $('pState').textContent = running ? 'Running' : 'Stopped';
 }

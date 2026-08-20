@@ -59,6 +59,7 @@ overrides it for that session.
 | **Pagination** | Pages per search (Multi Page mode only). |
 | **Delay (sec)** | Minimum pause between actions; the actual pause is randomised between this and +2 s. |
 | **Start / End** | Run only a slice of the CSV — handy for resuming a long file. |
+| **Open each job for full description** | Clicks every job card and captures the whole posting — description, skills, preferred candidate — into one cell. Much slower: budget a few seconds per job. |
 | **Run in a background tab** | Keeps the automated tab unfocused so you can work in another tab. |
 | **Download** | Re-export everything collected so far, without re-scraping. |
 | **Clear Data** | Wipe the stored results. |
@@ -83,6 +84,7 @@ Downloads automatically when the queue finishes, as `bayt-jobs-<timestamp>.csv`:
 | `Remote` | `Yes` / `No`, derived from the metadata row |
 | `Other_Info` | Every other fact the card shows, `\|`-joined — job type, and anything Bayt adds later |
 | `Summary` | Bayt's AI summary, with the `✨ Summary:` prefix stripped |
+| `Job_Details` | The full posting, when **Open each job for full description** is ticked (otherwise `N/A`) |
 | `Job_Date` | e.g. `6 days ago` |
 | `Result_Page`, `Scraped_At` | Which page it came from, ISO timestamp |
 
@@ -128,6 +130,11 @@ click **Find jobs** → wait for the results page → scrape → optional extra 
 * **Real pagination links.** Multi-page mode reads the next page's URL from the `#pagination` strip
   (`<a class="jsAjaxLoad" href="…?page=2">`) instead of guessing, so any filters already in the URL are kept,
   and a page that isn't linked ends the loop rather than being requested blindly.
+* **Full descriptions are verified, not assumed.** With the checkbox on, each card is clicked (the card itself,
+  never its title link, which would navigate away) and the run waits until the panel's own `jobId` matches that
+  card's id before reading it — so a panel that has not refreshed yet is never recorded as the wrong job's
+  description. A panel that never arrives leaves `Job_Details` as `N/A` and the run moves on.
+  **Stop** interrupts this pass between jobs rather than after the whole page.
 * **Failures are per-row.** A row that errors increments the **Errors** counter and the run continues.
 * **Crash-safe.** Results are mirrored to `chrome.storage` after every step, so a service-worker restart does
   not lose data — use **Download** to export it.
@@ -161,6 +168,31 @@ list. Nothing else in the codebase hard-codes a selector.
 
 ---
 
+### What `Job_Details` looks like
+
+One cell, plain text, newlines preserved (Excel shows them with wrap enabled):
+
+```
+Dhahran, Saudi Arabia | Full time · No experience required | Accounting
+
+JOB DESCRIPTION
+Description
+In this role, you will oversee the accounting operations of a Saudi hospital business…
+
+SKILLS
+What we offer
+Your salary is tax free!
+Skills & Competencies
+• Strong communication, stakeholder management, and teamwork skills.
+• Advanced Microsoft Excel and financial systems
+
+PREFERRED CANDIDATE
+Years of experience: No experience required
+Degree: High school or equivalent
+```
+
+---
+
 ## Troubleshooting
 
 | Symptom | Fix |
@@ -170,6 +202,8 @@ list. Nothing else in the codebase hard-codes a selector.
 | `Content script did not respond` | Reload the extension at `chrome://extensions/`. |
 | Nothing downloads | Check Chrome's download settings; the file is written without a Save-As prompt. |
 | Run stalls | Increase **Delay (sec)** — Bayt throttles rapid requests. |
+| `Job_Details` is `N/A` | The detail panel did not open, or opened without a matching `jobId`. Check `SEL.detailDescription` / `SEL.detailJobIdLink` in `content.js`. |
+| Full descriptions are slow | Expected — one click and one panel load per job. Untick the box to scrape listings only. |
 
 ---
 

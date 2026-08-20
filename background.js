@@ -34,6 +34,7 @@ function newState() {
     doneRows: 0,          // rows that finished cleanly
     errorRows: 0,         // rows that failed
     mode: 'csv',          // 'csv' = search each row | 'current' = Just Scrape
+    withDetails: false,   // open every card and capture its full description
     maxPages: 1,
     minDelay: 2000,
     maxDelay: 4000,
@@ -340,6 +341,7 @@ async function runScrape(payload) {
   state.minDelay      = payload.minDelay || 2000;
   state.maxDelay      = payload.maxDelay || 4000;
   state.backgroundTab = !!payload.backgroundTab;
+  state.withDetails   = !!payload.withDetails;
   state.results       = carriedResults;
 
   keepAlive(true);
@@ -586,7 +588,10 @@ async function scrapePages(tabId, row) {
     }
 
     await ensureContentScript(tabId);
-    const res = await sendToTab(tabId, { type: 'SCRAPE' });
+    const res = await sendToTab(tabId, {
+      type: 'SCRAPE',
+      withDetails: state.withDetails
+    });
 
     if (!res || !res.ok) throw new Error((res && res.error) || 'Scrape failed.');
     if (!res.jobs.length) {
@@ -608,7 +613,9 @@ async function scrapePages(tabId, row) {
       jobCount: state.results.length + collected.length
     });
 
-    if (page === 1) resultsUrl = (await getTab(tabId) || {}).url || resultsUrl;
+    // resultsUrl stays as captured on entry: opening a detail panel can
+    // push a ?jobId= onto the address bar, which must not leak into the
+    // pagination fallback URL.
     if (page >= state.maxPages) break;
 
     // --- Look ahead while we are still on this page ---------------------
@@ -647,6 +654,7 @@ const CSV_COLUMNS = [
   { key: 'remote',         header: 'Remote' },
   { key: 'otherInfo',      header: 'Other_Info' },
   { key: 'summary',        header: 'Summary' },
+  { key: 'details',        header: 'Job_Details' },
   { key: 'date',           header: 'Job_Date' },
   { key: 'url',            header: 'Job_URL' },
   { key: 'page',           header: 'Result_Page' },
@@ -735,8 +743,25 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       hydrated.then(() => runScrape(msg.payload));   // progress is pushed
       return;
 
+    // Emitted by content.js while it walks the cards for full details.
+    case 'DETAIL_PROGRESS':
+      if (state.running) {
+        report({ message: 'Reading job ' + msg.index + ' of ' + msg.total + '…' });
+      }
+      return;
+
     case 'STOP_SCRAPE':
       state.stopRequested = true;
+      // The full-description pass can spend a minute inside one page, so
+      // tell the content script directly rather than making the user wait
+      // for it to finish. executeScript shares the content script's
+      // isolated world, so this flag is visible to it.
+      if (state.tabId) {
+        chrome.scripting.executeScript({
+          target: { tabId: state.tabId },
+          func: () => { window.__baytScraperStop = true; }
+        }, () => void chrome.runtime.lastError);
+      }
       report({ log: '⏸ Stop requested…' });
       sendResponse({ ok: true });
       return;
